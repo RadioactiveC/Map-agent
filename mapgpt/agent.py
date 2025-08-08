@@ -14,6 +14,11 @@ try:
 except Exception:  # pragma: no cover
     ChatOpenAI = None  # type: ignore
 
+try:
+    from langchain_deepseek import ChatDeepSeek  # type: ignore
+except Exception:  # pragma: no cover
+    ChatDeepSeek = None  # type: ignore
+
 from .tools import get_tool_names, get_tools_prompt_string, call_tool
 
 
@@ -119,14 +124,27 @@ def build_graph(llm_model_name: Optional[str] = None, max_steps: int = 15):
         step = state["step"]
         # Initialize LLM lazily to avoid import/runtime errors when not configured
         llm = None
-        if ChatOpenAI is not None and llm_model_name:
-            try:
-                llm = ChatOpenAI(model=llm_model_name, temperature=0)
-            except Exception:
-                llm = None
+        if llm_model_name:
+            model_lower = llm_model_name.lower()
+            if "deepseek" in model_lower and ChatDeepSeek is not None:
+                api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("API_KEY")
+                base_url = os.environ.get("DEEPSEEK_API_BASE")
+                try:
+                    if api_key or base_url:
+                        # Pass explicit credentials/base URL if provided
+                        llm = ChatDeepSeek(model=llm_model_name, temperature=0, api_key=api_key, base_url=base_url)  # type: ignore[arg-type]
+                    else:
+                        llm = ChatDeepSeek(model=llm_model_name, temperature=0)  # type: ignore
+                except Exception:
+                    llm = None
+            elif ChatOpenAI is not None:
+                try:
+                    llm = ChatOpenAI(model=llm_model_name, temperature=0)
+                except Exception:
+                    llm = None
         if llm is None:
             raise RuntimeError(
-                "LLM is not configured. Please set OPENAI_API_KEY and provide a model name."
+                "LLM is not configured. Provide a model name and API key. For DeepSeek, set DEEPSEEK_API_KEY; for OpenAI, set OPENAI_API_KEY."
             )
 
         ai = llm.invoke(messages)  # type: ignore
