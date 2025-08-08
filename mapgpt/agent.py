@@ -41,6 +41,8 @@ SYS_PROMPT_TEMPLATE = (
     "The general process of making a map is: first initialize the map, add map layers, add other map components as needed, and finally generate the map.\n"
     "When making a map, the first step must be to initialize the map, and the last step must be to generate the map using map_save tool. These two steps are indispensable.\n"
     "Do not skip these steps.\n"
+    "CRITICAL: Once map_save succeeds (Observation contains 'Map saved to:'), immediately stop calling tools and reply with a single Final Answer block.\n"
+    "Your Final Answer must include: a short summary of what you did, list of all input data paths used, and the output image path(s).\n"
     "Begin!\n"
     "Previous conversation history: {chat_history}\n"
     "Question: {input}\n"
@@ -170,10 +172,18 @@ def build_graph(llm_model_name: Optional[str] = None, max_steps: int = 15):
         observation = call_tool(action_name, action_input)
 
         # Feed back the observation as a continuation in the required format
-        obs_block = (
-            f"Observation: {observation}\n"
-            "Thought:"
-        )
+        # If map_save succeeded, nudge the model to finalize immediately
+        if "Map saved to:" in observation:
+            obs_block = (
+                f"Observation: {observation}\n"
+                "You have successfully saved the map. Now respond with a single Final Answer per the required format, summarizing the steps, listing all data paths used, and the output path. Do not call any more tools.\n"
+                "Thought:"
+            )
+        else:
+            obs_block = (
+                f"Observation: {observation}\n"
+                "Thought:"
+            )
         messages = messages + [HumanMessage(content=obs_block)]
         return {"messages": messages, "step": state["step"], "max_steps": state["max_steps"]}
 
@@ -231,6 +241,27 @@ def run_agent(
             parsed = parse_model_output(msg.content)
             if parsed.get("type") == "final":
                 final_answer = parsed.get("final")
+    if final_answer is None:
+        # Fallback: if a map was saved, synthesize a concise Final Answer
+        saved_path: Optional[str] = None
+        for msg in final_state["messages"]:
+            if isinstance(msg, HumanMessage) and isinstance(msg.content, str) and "Observation:" in msg.content:
+                m = re.search(r"Map saved to:\s*(.*)", msg.content)
+                if m:
+                    saved_path = m.group(1).strip()
+        if saved_path:
+            # Import lazily to avoid cycles at module load
+            try:
+                from .tools import _SESSION as _MAP_SESSION  # type: ignore
+                data_paths = _MAP_SESSION.data_paths if getattr(_MAP_SESSION, "data_paths", None) else []
+            except Exception:
+                data_paths = []
+            parts: List[str] = []
+            parts.append("地图已生成并保存。")
+            if data_paths:
+                parts.append("使用的数据路径: " + ", ".join(data_paths))
+            parts.append("输出路径: " + saved_path)
+            final_answer = "\n".join(parts)
     if final_answer is None:
         final_answer = "No Final Answer produced within step limit."
     return final_answer

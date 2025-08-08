@@ -27,6 +27,39 @@ except Exception:  # pragma: no cover - optional at runtime
 logger = logging.getLogger("mapgpt.tools")
 logging.basicConfig(level=logging.INFO)
 
+# Simple mapping for common Chinese color names to matplotlib-compatible names
+_CN_COLOR_MAP: Dict[str, str] = {
+    "白": "white",
+    "白色": "white",
+    "黑": "black",
+    "黑色": "black",
+    "红": "red",
+    "红色": "red",
+    "蓝": "blue",
+    "蓝色": "blue",
+    "绿": "green",
+    "绿色": "green",
+    "黄": "yellow",
+    "黄色": "yellow",
+    "灰": "gray",
+    "灰色": "gray",
+    "紫": "purple",
+    "紫色": "purple",
+    "橙": "orange",
+    "橙色": "orange",
+}
+
+
+def _normalize_color(color: str) -> str:
+    key = color.strip().lower()
+    # Try direct match in Chinese map first (keys are Chinese, but we compare lowercase anyway)
+    if key in _CN_COLOR_MAP:
+        return _CN_COLOR_MAP[key]
+    # Also try removing the trailing '色'
+    if key.endswith("色") and key[:-1] in _CN_COLOR_MAP:
+        return _CN_COLOR_MAP[key[:-1]]
+    return color
+
 
 @dataclass
 class LineStyle:
@@ -203,7 +236,7 @@ def modify_line_width(action_input: str) -> str:
 
 def modify_line_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = action_input.strip()
+    color = _normalize_color(action_input)
     if not color:
         return "Error: line color must be a non-empty string"
     _SESSION.line_style.color = color
@@ -212,7 +245,7 @@ def modify_line_color(action_input: str) -> str:
 
 def modify_polygon_edge_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = action_input.strip()
+    color = _normalize_color(action_input)
     if not color:
         return "Error: polygon edge color must be a non-empty string"
     _SESSION.polygon_style.edgecolor = color
@@ -225,13 +258,14 @@ def modify_polygon_face_color(action_input: str) -> str:
     if color.lower() in {"none", "transparent", ""}:
         _SESSION.polygon_style.facecolor = None
         return "Polygon face color set to none"
+    color = _normalize_color(color)
     _SESSION.polygon_style.facecolor = color
     return f"Polygon face color set to {color}"
 
 
 def modify_point_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = action_input.strip()
+    color = _normalize_color(action_input)
     if not color:
         return "Error: point color must be a non-empty string"
     _SESSION.point_style.color = color
@@ -325,7 +359,7 @@ def map_set_title(action_input: str) -> str:
 
 def map_set_background_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = action_input.strip() or _SESSION.background_color
+    color = _normalize_color(action_input.strip() or _SESSION.background_color)
     _SESSION.background_color = color
     if _SESSION.figure is not None and _SESSION.axis is not None:
         _SESSION.figure.patch.set_facecolor(color)
