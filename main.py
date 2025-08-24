@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
         help="LLM model name (requires OPENAI_API_KEY)",
     )
     parser.add_argument(
-        "--max-steps", type=int, default=15, help="Max Thought-Action-Observation steps",
+        "--max-steps", type=int, default=60, help="Max Thought-Action-Observation steps",
     )
     parser.add_argument(
         "--list-tools", action="store_true", help="List available tools and exit",
