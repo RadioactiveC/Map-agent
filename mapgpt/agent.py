@@ -21,6 +21,7 @@ except Exception:  # pragma: no cover
 
 from .tools import get_tool_names, get_tools_prompt_string, call_tool
 
+
 # version - 3
 SYS_PROMPT_TEMPLATE = (
     "You are a map expert. Your task is to solve problems step-by-step using tools. "
@@ -58,59 +59,6 @@ SYS_PROMPT_TEMPLATE = (
     "Thought:"
 )
 
-# version - 2 （not so good！cause several actions in one response）
-# SYS_PROMPT_TEMPLATE = (
-#     "You are a map expert and you are proficient in generating maps using vector or raster data. "
-#     "Your task is to answer the question or solve the problem step by step using the tools provided.\n"
-#     "You must respond with either a \"Thought, Action, Action Input\" block or a single \"Final Answer\" block.\n"
-#     "When you use a tool, use the following format:\n"
-#     "Thought: (reflect on your progress and decide what to do next. This is a mandatory step)\n"
-#     "Action: (the name of the tool to use, should be one of [{tool_names}])\n"
-#     "Action Input: (the input to the tool)\n\n"
-#     "After you use a tool, the system will provide an Observation. You will use this Observation to plan your next step.\n\n"
-#     "When you have completed the task and saved the map, respond with the final answer in this format:\n"
-#     "Thought: (I have now completed all the steps and can provide the final answer.)\n"
-#     "Final Answer: (A summary of what you did, the data paths used, and the final output path.)\n\n"
-#     "Here are the tools available:{tool_strings}\n\n"
-#     "IMPORTANT RULES:\n"
-#     "1. The process is: Thought -> Action -> Action Input. The system provides the Observation.\n"
-#     "2. The first step must be `map_initial` to create the map canvas.\n"
-#     "3. The final step to generate the map must be `map_save`.\n"
-#     "4. Once `map_save` is successful (you see 'Map saved to:' in the Observation), you MUST stop and provide the Final Answer.\n\n"
-#     "Begin!\n"
-#     "Previous conversation history: {chat_history}\n"
-#     "Question: {input}\n"
-#     "Thought:"
-# )
-
-# version - 1 （not ok！！！）
-# SYS_PROMPT_TEMPLATE = (
-#     "You are a map expert and you are proficient in generating maps using vector or raster data. "
-#     "Your task is to answer the question or solve the problem step by step using the tools provided.\n"
-#     "You can only respond with a single complete \"Thought, Action, Action Input, Observation\" format OR a single \"Final Answer\" format.\n"
-#     "Complete format:\n"
-#     "Thought: (reflect on your progress and decide what to do next (based on observation if exist), do not skip)\n"
-#     "Action: (the action name, should be one of [{tool_names}]. decide the action based on previous Thought and Observation)\n"
-#     "Action Input: (the input string to the action, decide the input based on previous Thought and Observation)\n"
-#     "Observation: (the result of the action)\n"
-#     "(this process can repeat and you can only process one subtask at a time)\n"
-#     "OR\n"
-#     "Thought: (review original question and check my total process)\n"
-#     "Final Answer: (output the final answer to the original input question based on observations and lists all data paths used and generated)\n\n"
-#     "Answer the question below using the following tools:{tool_strings}\n"
-#     "Your final answer should contain all information necessary to answer the question and subquestions.\n\n"
-#     "IMPORTANT: Your first step is to learn and understand the following rules and examples, and plan your steps accordingly:\n"
-#     "The general process of making a map is: first initialize the map, add map layers, add other map components as needed, and finally generate the map.\n"
-#     "When making a map, the first step must be to initialize the map, and the last step must be to generate the map using map_save tool. These two steps are indispensable.\n\n"
-#     "Do not skip these steps.\n\n"
-#     "CRITICAL: Once map_save succeeds (Observation contains 'Map saved to:'), immediately stop calling tools and reply with a single Final Answer block.\n"
-#     "Your Final Answer must include: a short summary of what you did, list of all input data paths used, and the output image path(s).\n"
-#     "Begin!\n"
-#     "Previous conversation history: {chat_history}\n"
-#     "Question: {input}\n"
-#     "Thought:"
-# )
-
 
 class AgentState(TypedDict):
     messages: List[Any]
@@ -146,7 +94,7 @@ FINAL_RE = re.compile(
     r"Thought:\s*(?P<thought>.*?)\n\s*Final Answer:\s*(?P<final>.*)", re.DOTALL | re.IGNORECASE
 )
 
-# 解析模型输出，匹配三种模式：1.Action（有observation，但不建议，容易幻觉） 2.Final 3.partial_action(无observation，避免模型幻觉)
+# Parse the model output and match three modes: 1.Action (with observation, but not recommended, easy to hallucinate) 2.Final 3.partial_action (without observation, to avoid model hallucination)
 def parse_model_output(text: str) -> Dict[str, str]:
     match = ACTION_RE.search(text)
     if match:
