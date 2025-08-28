@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover
 from .tools import get_tool_names, get_tools_prompt_string, call_tool
 
 
-# version - 3
+# version - 6
 SYS_PROMPT_TEMPLATE = (
     "You are a map expert. Your task is to solve problems step-by-step using tools. "
     "You MUST follow these rules with extreme care:\n"
@@ -36,23 +36,43 @@ SYS_PROMPT_TEMPLATE = (
     "Action Input: (The input for that SINGLE tool)\n\n"
 
     "---!! INCORRECT FORMAT (DO NOT DO THIS) !! ---\n"
+    "Example 1: Multiple Actions\n"
     "Thought: I will do several things.\n"
     "Action: tool_1\n"
     "Action Input: input_1\n"
     "Action: tool_2\n"
     "Action Input: input_2\n\n"
+    
+    "Example 2: Multiple Action Inputs\n"
+    "Thought: I will set the edge color.\n"
+    "Action: modify_polygon_edge_color\n"
+    "Action Input: darkgreen\n"
+    "Action Input: darkgreen\n\n"
 
     "When you have completed ALL steps and have successfully saved the map (confirmed by an Observation), your final response must be in this format:\n"
     "Thought: (I have completed the task and can now provide the final answer.)\n"
     "Final Answer: (A summary of what you did, the data paths used, and the final output path.)\n\n"
 
     "Here are the tools available:{tool_strings}\n\n"
-
-    "CRITICAL REMINDERS:\n"
-    "- Your very first action MUST be `map_initial`.\n"
-    "- Your last action before the Final Answer MUST be `map_save`.\n"
-    "- Once you see 'Map saved to:' in the Observation, your next and ONLY response MUST be the 'Final Answer' block.\n\n"
-
+    
+    "--- MAP-MAKING WORKFLOW ---\n"
+    "**IMPORTANT**: If the `Previous conversation history` is not empty, your task is to modify the previous map. To do this, you MUST RE-EXECUTE the entire map creation process from the beginning, but incorporate the user's new requests at the correct steps. Review the history to understand the original steps, then start again from `map_initial` and apply the new changes as you go.\n\n"
+    
+    "WORKFLOW RULES & REMINDERS:\n"
+    "1.  **Setup Canvas:**\n"
+    "    - Your first action MUST be `map_initial`.\n"
+    "    - If the user requests a specific background color, your very next action MUST be `map_set_background_color`. Otherwise, the background will be white by default.\n"
+    "2.  **Build & Style Layers:**\n"
+    "    - You MUST add layers in the exact order they are mentioned in the user's prompt. The first-mentioned layer should be the base, added first.\n"
+    "    - To style a layer (e.g., set its color), you MUST use the `modify_*` tools *immediately before* adding that specific layer with `map_add_layer`.\n"
+    "3.  **Finalize Aesthetics:**\n"
+    "    - After all layers are added, add the finishing touches.\n"
+    "    - Use `map_set_title` for the title.\n"
+    "    - Use `map_add_legend` to add a legend. **IMPORTANT RULE**: Leave the Action Input for `map_add_legend` completely empty to use the default settings, unless the user explicitly asks for a specific location (e.g., 'put the legend in the lower right'). Do not invent a location.\n"
+    "4.  **Save & Finish:**\n"
+    "    - Your final action MUST be `map_save`.\n"
+    "    - Once you see 'Map saved to:', your task is complete. Your next and ONLY response MUST be the 'Final Answer' block. Do not call any more tools after saving.\n\n"
+    
     "Begin!\n"
     "Previous conversation history: {chat_history}\n"
     "Question: {input}\n"
@@ -113,8 +133,9 @@ def parse_model_output(text: str) -> Dict[str, str]:
             "final": match.group("final").strip(),
         }
     # If the model only returns Thought/Action/Action Input without Observation, we will produce observation by executing tool
+    # Modify (?P<input>.*) to (?P<input>[^\n]*) to avoid illusion output of llm. Parse llm output robustly！
     partial_action = re.search(
-        r"Thought:\s*(?P<thought>.*?)\n\s*Action:\s*(?P<action>\w+)\n\s*Action Input:\s*(?P<input>.*)",
+        r"Thought:\s*(?P<thought>.*?)\n\s*Action:\s*(?P<action>\w+)\n\s*Action Input:\s*(?P<input>[^\n]*)",
         text,
         re.DOTALL | re.IGNORECASE,
     )
@@ -236,7 +257,7 @@ def run_agent(
     chat_history: Optional[List[Tuple[str, str]]] = None,
     llm_model_name: Optional[str] = None,
     max_steps: int = 30,
-) -> str:
+) -> tuple[str, list]: # for history
     system_message = _build_system_message(question, chat_history)
     state: AgentState = {
         "messages": [system_message, HumanMessage(content="")],
@@ -245,7 +266,8 @@ def run_agent(
     }
 
     graph = build_graph(llm_model_name=llm_model_name, max_steps=max_steps)
-    final_state = graph.invoke(state)
+    config = {"recursion_limit": max_steps}
+    final_state = graph.invoke(state, config=config)
 
     # Find Final Answer if present
     final_answer = None
@@ -277,4 +299,5 @@ def run_agent(
             final_answer = "\n".join(parts)
     if final_answer is None:
         final_answer = "No Final Answer produced within step limit."
-    return final_answer
+
+    return final_answer, final_state["messages"]
