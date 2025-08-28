@@ -101,7 +101,7 @@ class MapSession:
     point_style: PointStyle = field(default_factory=PointStyle)
 
     title_color: str = "#0a0a0a"
-    background_color: str = "#0a0a0a"
+    background_color: str = "#ffffff"
     title: Optional[str] = None
 
     def ensure_initialized(self) -> None:
@@ -232,11 +232,11 @@ def map_initial(action_input: str) -> str:
         f"Paths count: {len(paths)}"
     )
 
-
+# Modify action_input.strip() to action_input.split('\n')[0].strip() to avoid illusion output of llm. Parse llm output robustly！
 def modify_line_width(action_input: str) -> str:
     _SESSION.ensure_initialized()
     try:
-        width = float(action_input.strip())
+        width = float(action_input.split('\n')[0].strip())
     except Exception:
         return "Error: line width must be a float"
     _SESSION.line_style.width = width
@@ -245,7 +245,7 @@ def modify_line_width(action_input: str) -> str:
 
 def modify_line_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = _normalize_color(action_input)
+    color = _normalize_color(action_input.split('\n')[0].strip())
     if not color:
         return "Error: line color must be a non-empty string"
     _SESSION.line_style.color = color
@@ -254,7 +254,7 @@ def modify_line_color(action_input: str) -> str:
 
 def modify_polygon_edge_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = _normalize_color(action_input)
+    color = _normalize_color(action_input.split('\n')[0].strip())
     if not color:
         return "Error: polygon edge color must be a non-empty string"
     _SESSION.polygon_style.edgecolor = color
@@ -263,7 +263,7 @@ def modify_polygon_edge_color(action_input: str) -> str:
 
 def modify_polygon_face_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = action_input.strip()
+    color = action_input.split('\n')[0].strip()
     if color.lower() in {"none", "transparent", ""}:
         _SESSION.polygon_style.facecolor = None
         return "Polygon face color set to none"
@@ -274,7 +274,7 @@ def modify_polygon_face_color(action_input: str) -> str:
 
 def modify_point_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = _normalize_color(action_input)
+    color = _normalize_color(action_input.split('\n')[0].strip())
     if not color:
         return "Error: point color must be a non-empty string"
     _SESSION.point_style.color = color
@@ -283,7 +283,7 @@ def modify_point_color(action_input: str) -> str:
 
 def modify_title_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = _normalize_color(action_input.strip() or _SESSION.background_color)
+    color = _normalize_color(action_input.split('\n')[0].strip() or _SESSION.background_color)
     _SESSION.title_color = color
     if not color:
         return "Error: Title color must be a non-empty string"
@@ -294,7 +294,7 @@ def modify_title_color(action_input: str) -> str:
 def modify_point_size(action_input: str) -> str:
     _SESSION.ensure_initialized()
     try:
-        size = float(action_input.strip())
+        size = float(action_input.split('\n')[0].strip())
     except Exception:
         return "Error: point size must be a number"
     _SESSION.point_style.size = size
@@ -308,9 +308,9 @@ def map_add_legend(action_input: str) -> str:
         return "Warning: No labeled layers were added to create a legend from."
 
     params = {}
-    if action_input.strip():
+    if action_input.split('\n')[0].strip():
         try:
-            params = json.loads(action_input.strip())
+            params = json.loads(action_input.split('\n')[0].strip())
         except Exception as e:
             return f"Error: Invalid JSON for legend parameters: {e}"
 
@@ -369,13 +369,13 @@ def map_add_layer(action_input: str) -> str:
 
     path, label = "", None
     try:
-        data = json.loads(action_input.strip())
+        data = json.loads(action_input.split('\n')[0].strip())
         if isinstance(data, dict):
             path, label = data.get("path"), data.get("label")
         else:
-            path = action_input.strip()
+            path = action_input.split('\n')[0].strip()
     except json.JSONDecodeError:
-        path = action_input.strip()
+        path = action_input.split('\n')[0].strip()
 
     if not path: return "Error: layer path is empty"
     if not _safe_exists(path): return f"Error: layer path does not exist: {path}"
@@ -445,7 +445,7 @@ def map_add_layer(action_input: str) -> str:
 
 def map_set_title(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    title = action_input.strip()
+    title = action_input.split('\n')[0].strip()
     _SESSION.title = title if title else None
     if _SESSION.title:
         _SESSION.axis.set_title(_SESSION.title, color=_SESSION.title_color)
@@ -455,7 +455,7 @@ def map_set_title(action_input: str) -> str:
 
 def map_set_background_color(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    color = _normalize_color(action_input.strip() or _SESSION.background_color)
+    color = _normalize_color(action_input.split('\n')[0].strip() or _SESSION.background_color)
     _SESSION.background_color = color
     if _SESSION.figure is not None and _SESSION.axis is not None:
         _SESSION.figure.patch.set_facecolor(color)
@@ -465,7 +465,7 @@ def map_set_background_color(action_input: str) -> str:
 
 def map_save(action_input: str) -> str:
     _SESSION.ensure_initialized()
-    output = action_input.strip() or "./map_output.png"
+    output = action_input.split('\n')[0].strip() or "./map_output.jpg"
     out_dir = os.path.dirname(output) or "."
     try:
         os.makedirs(out_dir, exist_ok=True)
@@ -538,7 +538,7 @@ def get_tools_prompt_string() -> str:
                 "map_add_legend: Add a legend for all layers that were given a label. Input: optional JSON for styling, e.g., '{\"title\": \"Legend\", \"loc\": \"Location\"}'.",
                 "map_set_title: Set map title. Input: a string.",
                 "map_set_background_color: Set background. Input: color string.",
-                "map_save: Save the map image. Input: output path (e.g., '/workspace/out.png').",
+                "map_save: Save the map image. Input: output path (e.g., './map_output.jpg').",
             ]
         )
     )
