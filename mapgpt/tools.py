@@ -8,6 +8,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
+from langchain.tools import tool
 
 import matplotlib
 
@@ -141,6 +142,12 @@ def _safe_exists(path: str) -> bool:
         return False
 
 # Traverse the file to find the maximum coordinate axis range
+def _clean_path_arg(path_str: str) -> str:
+    if not path_str:
+        return ""
+    return path_str.strip().strip("'").strip('"').strip()
+
+
 def _collect_bounds_from_paths(paths: List[str]) -> Optional[Tuple[float, float, float, float]]:
     bounds: Optional[Tuple[float, float, float, float]] = None
     for p in paths:
@@ -179,6 +186,7 @@ def _collect_bounds_from_paths(paths: List[str]) -> Optional[Tuple[float, float,
 # Tool implementations
 # ---------------------
 
+@tool
 def map_initial(action_input: str) -> str:
     """
     Initialize the map canvas and store provided data paths.
@@ -198,7 +206,8 @@ def map_initial(action_input: str) -> str:
     # It is a good programming practice to first define an initial state of _SESSION globally and then modify it in the map_initial function.
     global _SESSION
 
-    paths = _parse_input_list(action_input)
+    raw_paths = _parse_input_list(action_input)
+    paths = [_clean_path_arg(p) for p in raw_paths]
 
     fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
     fig.patch.set_facecolor(_SESSION.background_color)
@@ -232,8 +241,11 @@ def map_initial(action_input: str) -> str:
         f"Paths count: {len(paths)}"
     )
 
-# Modify action_input.strip() to action_input.split('\n')[0].strip() to avoid illusion output of llm. Parse llm output robustly！
+@tool
 def modify_line_width(action_input: str) -> str:
+    """
+    Set line width. Input: float string, e.g., '1.5'.
+    """
     _SESSION.ensure_initialized()
     try:
         width = float(action_input.split('\n')[0].strip())
@@ -242,8 +254,11 @@ def modify_line_width(action_input: str) -> str:
     _SESSION.line_style.width = width
     return f"Line width set to {width}"
 
-
+@tool
 def modify_line_color(action_input: str) -> str:
+    """
+    Set line color. Input: color string or hex, e.g., 'white' or '#ffffff'.
+    """
     _SESSION.ensure_initialized()
     color = _normalize_color(action_input.split('\n')[0].strip())
     if not color:
@@ -251,8 +266,11 @@ def modify_line_color(action_input: str) -> str:
     _SESSION.line_style.color = color
     return f"Line color set to {color}"
 
-
+@tool
 def modify_polygon_edge_color(action_input: str) -> str:
+    """
+    Set polygon edge color. Input: color string.
+    """
     _SESSION.ensure_initialized()
     color = _normalize_color(action_input.split('\n')[0].strip())
     if not color:
@@ -260,8 +278,11 @@ def modify_polygon_edge_color(action_input: str) -> str:
     _SESSION.polygon_style.edgecolor = color
     return f"Polygon edge color set to {color}"
 
-
+@tool
 def modify_polygon_face_color(action_input: str) -> str:
+    """
+    Set polygon face color. Input: color string or 'none'.
+    """
     _SESSION.ensure_initialized()
     color = action_input.split('\n')[0].strip()
     if color.lower() in {"none", "transparent", ""}:
@@ -271,8 +292,11 @@ def modify_polygon_face_color(action_input: str) -> str:
     _SESSION.polygon_style.facecolor = color
     return f"Polygon face color set to {color}"
 
-
+@tool
 def modify_point_color(action_input: str) -> str:
+    """
+    Set point color. Input: color string.
+    """
     _SESSION.ensure_initialized()
     color = _normalize_color(action_input.split('\n')[0].strip())
     if not color:
@@ -280,8 +304,11 @@ def modify_point_color(action_input: str) -> str:
     _SESSION.point_style.color = color
     return f"Point color set to {color}"
 
-
+@tool
 def modify_title_color(action_input: str) -> str:
+    """
+    Set title color. Input: color string.
+    """
     _SESSION.ensure_initialized()
     color = _normalize_color(action_input.split('\n')[0].strip() or _SESSION.background_color)
     _SESSION.title_color = color
@@ -290,8 +317,11 @@ def modify_title_color(action_input: str) -> str:
     _SESSION.title_color = color
     return f"Title color set to {color}"
 
-
+@tool
 def modify_point_size(action_input: str) -> str:
+    """
+    Set point size. Input: number string.
+    """
     _SESSION.ensure_initialized()
     try:
         size = float(action_input.split('\n')[0].strip())
@@ -301,8 +331,11 @@ def modify_point_size(action_input: str) -> str:
     return f"Point size set to {size}"
 
 
-# V2
+@tool
 def map_add_legend(action_input: str) -> str:
+    """
+    Add a legend for all layers that were given a label. Input: optional JSON for styling, e.g., '{\"title\": \"Legend\", \"loc\": \"Location\"}'.
+    """
     _SESSION.ensure_initialized()
     if not _SESSION.legend_entries:
         return "Warning: No labeled layers were added to create a legend from."
@@ -314,8 +347,6 @@ def map_add_legend(action_input: str) -> str:
         except Exception as e:
             return f"Error: Invalid JSON for legend parameters: {e}"
 
-    # Hard-coded location
-    # If the user does not specify loc, it defaults to 'lower right'
     params.setdefault('loc', 'lower right')
 
     try:
@@ -363,8 +394,11 @@ def map_add_legend(action_input: str) -> str:
         return f"Error: Failed to add legend: {e}"
 
 
-# V3
+@tool
 def map_add_layer(action_input: str) -> str:
+    """
+    Add a layer. Input: path string, OR a JSON string like '{\"path\": \"/path/to/file.shp\", \"label\": \"My Label\"}' to add a legend label.
+    """
     _SESSION.ensure_initialized()
 
     path, label = "", None
@@ -376,6 +410,8 @@ def map_add_layer(action_input: str) -> str:
             path = action_input.split('\n')[0].strip()
     except json.JSONDecodeError:
         path = action_input.split('\n')[0].strip()
+
+    path = _clean_path_arg(path)
 
     if not path: return "Error: layer path is empty"
     if not _safe_exists(path): return f"Error: layer path does not exist: {path}"
@@ -443,7 +479,11 @@ def map_add_layer(action_input: str) -> str:
         return f"Error: failed to add layer: {exc}"
 
 
+@tool
 def map_set_title(action_input: str) -> str:
+    """
+    Set map title. Input: a string.
+    """
     _SESSION.ensure_initialized()
     title = action_input.split('\n')[0].strip()
     _SESSION.title = title if title else None
@@ -453,7 +493,11 @@ def map_set_title(action_input: str) -> str:
     return "Title cleared"
 
 
+@tool
 def map_set_background_color(action_input: str) -> str:
+    """
+    Set background. Input: color string.
+    """
     _SESSION.ensure_initialized()
     color = _normalize_color(action_input.split('\n')[0].strip() or _SESSION.background_color)
     _SESSION.background_color = color
@@ -463,9 +507,14 @@ def map_set_background_color(action_input: str) -> str:
     return f"Background color set to {color}"
 
 
+@tool
 def map_save(action_input: str) -> str:
+    """
+    Save the map image. Input: output path (e.g., './map_output.jpg').
+    """
     _SESSION.ensure_initialized()
-    output = action_input.split('\n')[0].strip() or "./map_output.jpg"
+    raw_path = action_input.split('\n')[0].strip()
+    output = _clean_path_arg(raw_path) or "./map_output.jpg"
     out_dir = os.path.dirname(output) or "."
     try:
         os.makedirs(out_dir, exist_ok=True)
@@ -549,3 +598,26 @@ def call_tool(action_name: str, action_input: str) -> str:
     if tool is None:
         return f"Error: unknown tool '{action_name}'"
     return tool(action_input)
+
+
+def get_tools_list() -> List:
+    return [
+        map_initial,
+        modify_line_width,
+        modify_line_color,
+        modify_polygon_edge_color,
+        modify_polygon_face_color,
+        modify_point_color,
+        modify_point_size,
+        modify_title_color,
+        map_add_layer,
+        map_add_legend,
+        map_set_title,
+        map_set_background_color,
+        map_save,
+    ]
+
+
+def get_tools_by_name() -> Dict[str, any]:
+    tools = get_tools_list()
+    return {t.name: t for t in tools}
