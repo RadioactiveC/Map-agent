@@ -1,5 +1,35 @@
 # 🗺️ MapGPT Agent
 
+## Project Overview (English)
+
+MapGPT Agent is an AI-powered autonomous agent that generates, styles, and exports geospatial maps from plain natural language instructions. Instead of manually writing GIS scripts or clicking through desktop software, users simply describe what they want in everyday language — for example, *"Load the district boundary as a base map, overlay buildings in gray and parks in green, add a legend, title it 'CaoYang', and export to JPG"* — and the agent plans and executes every step automatically.
+
+### Key Highlights
+
+- **Autonomous Multi-Step Reasoning** — Built on the ReAct (Reason + Act) paradigm using [LangGraph](https://github.com/langchain-ai/langgraph), the agent iteratively thinks, selects the right tool, observes the result, and decides what to do next — all without human intervention.
+- **Natural Language Interface** — Accepts complex, multi-clause instructions in one go and decomposes them into an ordered sequence of GIS operations.
+- **Multi-Turn Conversational Memory** — Supports session persistence: users can create an initial map in one session, then return later to request modifications (e.g., *"Make the roads thicker"* or *"Switch to a dark-mode color scheme"*) without repeating earlier instructions.
+- **Modular Tool Architecture** — The agent orchestrates a suite of geospatial tools (layer loading, color/style modification, legend placement, title configuration, and image export) implemented with `geopandas`, `matplotlib`, and `rasterio`.
+- **LLM-Agnostic Design** — While currently optimized for the DeepSeek model, the architecture cleanly separates reasoning logic from the underlying LLM, making it straightforward to swap in other models.
+
+### Technical Stack
+
+| Category | Technologies |
+|---|---|
+| Agent Framework | LangGraph, LangChain |
+| Language Model | DeepSeek API (primary), OpenAI-compatible |
+| Geospatial Processing | GeoPandas, Rasterio, Matplotlib |
+| Languages | Python |
+| Data Formats | Shapefile (.shp), GeoJSON, GeoTIFF (.tif) |
+
+### What This Project Demonstrates
+
+This project reflects hands-on experience in **AI agent design**, **prompt engineering**, **geospatial data processing**, and **software architecture**. It showcases the ability to bridge large language models with domain-specific toolkits to solve real-world spatial analysis tasks through conversational interaction.
+
+---
+
+## 项目介绍（中文）
+
 MapGPT Agent 是一个基于大语言模型（LLM）的智能代理，可以通过自然语言指令来创建、修改和导出地理空间地图。它结合了 LangGraph 的状态机能力、 LLM 的推理能力以及一系列地理信息处理工具，实现了从需求到地图的自动化生成，所导出的地图实现了三个模块：1. 要素 2. 图例 3. 标题
 
 **本项目当前主要基于 DeepSeek API 进行开发与测试，与其他模型（如 OpenAI）的兼容性待验证。**
